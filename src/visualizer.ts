@@ -50,8 +50,9 @@ export class MilkdropVisualizer {
   }
 
   init(audioContext: AudioContext, audioNode: AudioNode): void {
-    const width = this.canvas.clientWidth || 1280;
-    const height = this.canvas.clientHeight || 720;
+    // 3072 balances crispness vs Quest GPU budget (4096 causes frame drops)
+    const width = 3072;
+    const height = 3072;
 
     this.canvas.width = width;
     this.canvas.height = height;
@@ -61,8 +62,11 @@ export class MilkdropVisualizer {
     this.visualizer = butterchurn.createVisualizer(audioContext, this.canvas, {
       width,
       height,
-      pixelRatio: window.devicePixelRatio || 1,
+      pixelRatio: 1,
     });
+
+    // Higher mesh = sharper warp distortions (default is ~48x36)
+    this.visualizer.setInternalMeshSize(192, 144);
 
     this.visualizer.connectAudio(audioNode);
 
@@ -100,14 +104,10 @@ export class MilkdropVisualizer {
     this.loadCurrentPreset(2.0);
   }
 
-  resize(width: number, height: number): void {
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.snapshotCanvas.width = width;
-    this.snapshotCanvas.height = height;
-    if (this.visualizer) {
-      this.visualizer.setRendererSize(width, height);
-    }
+  resize(_width: number, _height: number): void {
+    // Keep rendering at fixed high resolution (2048x2048) regardless of window size.
+    // The canvas CSS scales to fill the page, but the render buffer stays crisp.
+    // Only used for flat-screen display sizing — VR reads from snapshotCanvas.
   }
 
   /** Apply parameter overrides by reaching into Butterchurn's internal preset state */

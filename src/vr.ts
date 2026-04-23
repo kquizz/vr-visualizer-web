@@ -49,14 +49,18 @@ export class VRRenderer {
 
     // Texture from the 2D snapshot canvas (already copied from Butterchurn)
     this.texture = new THREE.CanvasTexture(snapshotCanvas);
-    this.texture.minFilter = THREE.LinearFilter;
+    this.texture.minFilter = THREE.LinearMipmapLinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
+    this.texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    this.texture.generateMipmaps = true;
 
     // Inverted sphere — user looks at the inside
-    const geometry = new THREE.SphereGeometry(50, 64, 32);
+    const geometry = new THREE.SphereGeometry(200, 128, 64);
     geometry.scale(-1, 1, 1); // flip normals inward
     const material = new THREE.MeshBasicMaterial({ map: this.texture });
     this.sphere = new THREE.Mesh(geometry, material);
+    // Rotate seam behind the user (default is at 3 o'clock)
+    this.sphere.rotation.y = Math.PI / 2;
     this.scene.add(this.sphere);
 
     window.addEventListener('resize', () => this.onResize());
