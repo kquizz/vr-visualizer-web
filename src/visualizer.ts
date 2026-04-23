@@ -13,8 +13,15 @@ import butterchurnPresets from 'butterchurn-presets';
 import { dbg } from './debug';
 
 export interface ParamOverrides {
-  zoomDelta: number;  // added to preset's zoom each frame
-  rotDelta: number;   // added to preset's rot each frame
+  zoomDelta: number;
+  rotDelta: number;
+  waveROffset: number;
+  waveGOffset: number;
+  waveBOffset: number;
+  warpOffset: number;
+  decayOffset: number;
+  gammaOffset: number;
+  waveScaleOffset: number;
 }
 
 export class MilkdropVisualizer {
@@ -31,7 +38,12 @@ export class MilkdropVisualizer {
   private snapshotCtx: CanvasRenderingContext2D;
 
   /** Runtime parameter overrides applied each frame */
-  overrides: ParamOverrides = { zoomDelta: 0, rotDelta: 0 };
+  overrides: ParamOverrides = {
+    zoomDelta: 0, rotDelta: 0,
+    waveROffset: 0, waveGOffset: 0, waveBOffset: 0,
+    warpOffset: 0, decayOffset: 0,
+    gammaOffset: 0, waveScaleOffset: 0,
+  };
 
   onPresetChange?: (name: string) => void;
 
@@ -112,24 +124,45 @@ export class MilkdropVisualizer {
 
   /** Apply parameter overrides by reaching into Butterchurn's internal preset state */
   private applyOverrides(): void {
-    const { zoomDelta, rotDelta } = this.overrides;
-    if (zoomDelta === 0 && rotDelta === 0) return;
+    const o = this.overrides;
 
     try {
-      // Butterchurn internals: visualizer.renderer.presetEquationRunner.mdVSFrame
       const runner = this.visualizer?.renderer?.presetEquationRunner;
-      if (runner?.mdVSFrame) {
-        const frame = runner.mdVSFrame;
-        if (zoomDelta !== 0 && 'zoom' in frame) {
-          frame.zoom += zoomDelta * 0.02; // scale to reasonable range
-        }
-        if (rotDelta !== 0 && 'rot' in frame) {
-          frame.rot += rotDelta * 0.05;
-        }
-      }
+      if (!runner?.mdVSFrame) return;
+      const f = runner.mdVSFrame;
+
+      // Zoom & rotation (direct from thumbstick, per-frame)
+      if (o.zoomDelta !== 0 && 'zoom' in f) f.zoom += o.zoomDelta * 0.02;
+      if (o.rotDelta !== 0 && 'rot' in f) f.rot += o.rotDelta * 0.05;
+
+      // Wave color (accumulated offsets, clamped 0-1)
+      if (o.waveROffset !== 0 && 'wave_r' in f) f.wave_r = Math.max(0, Math.min(1, f.wave_r + o.waveROffset));
+      if (o.waveGOffset !== 0 && 'wave_g' in f) f.wave_g = Math.max(0, Math.min(1, f.wave_g + o.waveGOffset));
+      if (o.waveBOffset !== 0 && 'wave_b' in f) f.wave_b = Math.max(0, Math.min(1, f.wave_b + o.waveBOffset));
+
+      // Warp intensity (accumulated offset)
+      if (o.warpOffset !== 0 && 'warp' in f) f.warp = Math.max(0, f.warp + o.warpOffset);
+
+      // Decay — trail persistence (0.8 = fast fade, 1.0 = infinite trails)
+      if (o.decayOffset !== 0 && 'decay' in f) f.decay = Math.max(0.8, Math.min(1.0, f.decay + o.decayOffset));
+
+      // Gamma/brightness
+      if (o.gammaOffset !== 0 && 'gammaadj' in f) f.gammaadj = Math.max(0.5, Math.min(4.0, f.gammaadj + o.gammaOffset));
+
+      // Wave scale
+      if (o.waveScaleOffset !== 0 && 'wave_scale' in f) f.wave_scale = Math.max(0.1, Math.min(5.0, f.wave_scale + o.waveScaleOffset));
     } catch {
       // Internals changed — silently ignore
     }
+  }
+
+  resetOverrides(): void {
+    this.overrides = {
+      zoomDelta: 0, rotDelta: 0,
+      waveROffset: 0, waveGOffset: 0, waveBOffset: 0,
+      warpOffset: 0, decayOffset: 0,
+      gammaOffset: 0, waveScaleOffset: 0,
+    };
   }
 
   /** Render one frame and snapshot it. Called externally (e.g., from XR loop) or internally. */

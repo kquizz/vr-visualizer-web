@@ -89,19 +89,43 @@ export class VRRenderer {
   render(): void {
     // Poll VR controllers
     const input = this.controls.poll();
+    const o = this.milkdrop.overrides;
 
     // Preset navigation
     if (input.nextPreset) this.milkdrop.nextPreset();
     if (input.prevPreset) this.milkdrop.prevPreset();
     if (input.randomPreset) this.milkdrop.randomPreset();
 
-    // Parameter overrides from left thumbstick
-    this.milkdrop.overrides.zoomDelta = input.zoomDelta;
-    this.milkdrop.overrides.rotDelta = input.rotDelta;
+    // Apply thumbstick based on active mode
+    const scale = 0.01; // per-frame accumulation rate
+    switch (input.mode) {
+      case 'zoom-rot':
+        o.zoomDelta = input.stickY * 0.02;
+        o.rotDelta = input.stickX * 0.05;
+        break;
+      case 'warp-decay':
+        o.warpOffset += input.stickY * scale * 2;
+        o.decayOffset += input.stickX * scale * 0.1;
+        break;
+      case 'color':
+        o.waveROffset += input.stickX * scale;
+        o.waveBOffset -= input.stickX * scale;
+        o.waveGOffset += input.stickY * scale;
+        break;
+      case 'gamma-scale':
+        o.gammaOffset += input.stickY * scale * 2;
+        o.waveScaleOffset += input.stickX * scale * 2;
+        break;
+      case 'navigate':
+        // Zoom/rot only active while stick is moving
+        o.zoomDelta = 0;
+        o.rotDelta = 0;
+        break;
+    }
+
     if (input.resetParams) {
-      this.milkdrop.overrides.zoomDelta = 0;
-      this.milkdrop.overrides.rotDelta = 0;
-      dbg('[Controls] Params reset');
+      this.milkdrop.resetOverrides();
+      dbg('[Controls] All params reset');
     }
 
     // Drive Butterchurn from the XR loop since requestAnimationFrame
