@@ -1,6 +1,13 @@
 import { AudioEngine } from './audio';
 import { MilkdropVisualizer } from './visualizer';
 import { VRRenderer } from './vr';
+import { dbg, enableDebug } from './debug';
+
+// Enable debug overlay with ?debug in URL
+if (window.location.search.includes('debug')) {
+  enableDebug();
+  dbg('Debug mode enabled');
+}
 
 // DOM elements
 const milkdropCanvas = document.getElementById('milkdrop-canvas') as HTMLCanvasElement;
@@ -53,7 +60,7 @@ function startVisualization(): void {
   // Hide status
   statusEl.classList.add('hidden');
 
-  console.log(`Visualizer started with ${milkdrop.presetCount} presets`);
+  dbg(`Visualizer started: ${milkdrop.presetCount} presets, canvas ${milkdropCanvas.width}x${milkdropCanvas.height}`);
 }
 
 // --- Audio source handlers ---
@@ -152,17 +159,51 @@ window.addEventListener('resize', () => {
 });
 
 // --- VR setup ---
+// Don't create the Three.js WebGL context until VR is actually requested,
+// otherwise it can kill Butterchurn's WebGL context (browser limits active contexts)
 
 async function initVR(): Promise<void> {
-  vr = new VRRenderer(threeCanvas, milkdropCanvas);
-  const supported = await vr.checkVRSupport();
-  if (supported) {
-    btnVR.style.display = 'block';
-    btnVR.addEventListener('click', async () => {
-      await vr!.enterVR();
-      vr!.start();
-    });
+  dbg('[VR] initVR called');
+  dbg(`[VR] navigator.xr exists: ${'xr' in navigator}`);
+
+  if (!('xr' in navigator)) {
+    dbg('[VR] No WebXR support — skipping VR setup');
+    return;
   }
+
+  try {
+    const supported = await navigator.xr!.isSessionSupported('immersive-vr');
+    dbg(`[VR] immersive-vr supported: ${supported}`);
+    if (!supported) {
+      dbg('[VR] VR not supported — button stays hidden');
+      return;
+    }
+  } catch (err) {
+    dbg(`[VR] ERROR checking VR support: ${err}`);
+    return;
+  }
+
+  dbg('[VR] Showing Enter VR button');
+  btnVR.style.display = 'block';
+  btnVR.addEventListener('click', async () => {
+    dbg('[VR] Enter VR clicked');
+    try {
+      if (!vr) {
+        dbg('[VR] Creating VRRenderer...');
+        vr = new VRRenderer(threeCanvas, milkdrop);
+        dbg('[VR] VRRenderer created');
+      }
+      dbg('[VR] Requesting VR session...');
+      await vr.enterVR();
+      dbg('[VR] VR session started, starting render loop');
+      vr.start();
+      dbg('[VR] Render loop running');
+    } catch (err) {
+      dbg(`[VR] ERROR entering VR: ${err}`);
+      statusEl.textContent = `VR Error: ${err}`;
+      statusEl.classList.remove('hidden');
+    }
+  });
 }
 
 initVR();

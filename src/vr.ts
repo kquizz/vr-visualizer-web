@@ -1,10 +1,13 @@
 /**
  * Three.js + WebXR setup.
- * Takes the Butterchurn canvas as a texture and renders it
- * onto a sphere surrounding the VR camera.
+ * Reads from the MilkdropVisualizer's snapshot canvas (a 2D canvas
+ * that gets updated immediately after each Butterchurn render).
+ * Maps it onto an inverted sphere surrounding the VR camera.
  */
 
 import * as THREE from 'three';
+import { dbg } from './debug';
+import type { MilkdropVisualizer } from './visualizer';
 
 export class VRRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -13,9 +16,15 @@ export class VRRenderer {
   private texture: THREE.CanvasTexture;
   private sphere: THREE.Mesh;
   private threeCanvas: HTMLCanvasElement;
+  private frameCount = 0;
+  private milkdrop: MilkdropVisualizer;
 
-  constructor(threeCanvas: HTMLCanvasElement, milkdropCanvas: HTMLCanvasElement) {
+  constructor(threeCanvas: HTMLCanvasElement, milkdrop: MilkdropVisualizer) {
     this.threeCanvas = threeCanvas;
+    this.milkdrop = milkdrop;
+    const snapshotCanvas = milkdrop.snapshotCanvas;
+
+    dbg(`[VR] Constructor — snapshot canvas: ${snapshotCanvas.width}x${snapshotCanvas.height}`);
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -34,8 +43,8 @@ export class VRRenderer {
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(0, 0, 0);
 
-    // Create texture from Butterchurn canvas
-    this.texture = new THREE.CanvasTexture(milkdropCanvas);
+    // Texture from the 2D snapshot canvas (already copied from Butterchurn)
+    this.texture = new THREE.CanvasTexture(snapshotCanvas);
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
 
@@ -47,6 +56,7 @@ export class VRRenderer {
     this.scene.add(this.sphere);
 
     window.addEventListener('resize', () => this.onResize());
+    dbg('[VR] Scene ready — sphere + texture created');
   }
 
   private onResize(): void {
@@ -55,31 +65,35 @@ export class VRRenderer {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  async checkVRSupport(): Promise<boolean> {
-    if (!('xr' in navigator)) return false;
-    try {
-      return await navigator.xr!.isSessionSupported('immersive-vr');
-    } catch {
-      return false;
-    }
-  }
-
   async enterVR(): Promise<void> {
+    dbg('[VR] Requesting XR session...');
     const session = await navigator.xr!.requestSession('immersive-vr', {
       optionalFeatures: ['local-floor', 'bounded-floor'],
     });
+    dbg('[VR] Got XR session');
     this.renderer.xr.setSession(session);
     this.threeCanvas.style.display = 'block';
+    dbg('[VR] Session active');
   }
 
-  /** Call each frame — updates the texture from the Butterchurn canvas */
+  /** Call each frame — drives Butterchurn + updates texture from snapshot */
   render(): void {
+    // Drive Butterchurn from the XR loop since requestAnimationFrame
+    // is paused when the browser enters immersive VR mode
+    this.milkdrop.renderFrame();
+
     this.texture.needsUpdate = true;
     this.renderer.render(this.scene, this.camera);
+
+    this.frameCount++;
+    if (this.frameCount <= 5 || this.frameCount % 300 === 0) {
+      dbg(`[VR] frame ${this.frameCount} | snapshot ${this.milkdrop.snapshotCanvas.width}x${this.milkdrop.snapshotCanvas.height}`);
+    }
   }
 
   /** Start the Three.js render loop (uses XR-aware setAnimationLoop) */
   start(): void {
+    dbg('[VR] Starting render loop');
     this.renderer.setAnimationLoop(() => {
       this.render();
     });

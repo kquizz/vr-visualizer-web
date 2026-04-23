@@ -129,6 +129,15 @@
 
     <div id="drop-zone">Drop audio file here</div>
 
+    <!-- Debug overlay — visible on flat screen for diagnosing VR issues -->
+    <div id="debug-log" style="
+      position: absolute; top: 10px; left: 10px; z-index: 100;
+      background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace;
+      font-size: 12px; padding: 10px; max-width: 500px; max-height: 300px;
+      overflow-y: auto; border-radius: 4px; pointer-events: none;
+      display: none;
+    "></div>
+
     <input type="file" id="file-input" accept="audio/*" style="display:none" />
   </div>
 
