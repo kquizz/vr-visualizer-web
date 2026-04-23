@@ -3,11 +3,13 @@
  * Reads from the MilkdropVisualizer's snapshot canvas (a 2D canvas
  * that gets updated immediately after each Butterchurn render).
  * Maps it onto an inverted sphere surrounding the VR camera.
+ * Handles VR controller input for preset switching and param tweaks.
  */
 
 import * as THREE from 'three';
 import { dbg } from './debug';
 import type { MilkdropVisualizer } from './visualizer';
+import { VRControls } from './vr-controls';
 
 export class VRRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -18,10 +20,12 @@ export class VRRenderer {
   private threeCanvas: HTMLCanvasElement;
   private frameCount = 0;
   private milkdrop: MilkdropVisualizer;
+  private controls: VRControls;
 
   constructor(threeCanvas: HTMLCanvasElement, milkdrop: MilkdropVisualizer) {
     this.threeCanvas = threeCanvas;
     this.milkdrop = milkdrop;
+    this.controls = new VRControls();
     const snapshotCanvas = milkdrop.snapshotCanvas;
 
     dbg(`[VR] Constructor — snapshot canvas: ${snapshotCanvas.width}x${snapshotCanvas.height}`);
@@ -71,13 +75,31 @@ export class VRRenderer {
       optionalFeatures: ['local-floor', 'bounded-floor'],
     });
     dbg('[VR] Got XR session');
+    this.controls.attach(session);
     this.renderer.xr.setSession(session);
     this.threeCanvas.style.display = 'block';
-    dbg('[VR] Session active');
+    dbg('[VR] Session active with controller input');
   }
 
-  /** Call each frame — drives Butterchurn + updates texture from snapshot */
+  /** Call each frame — polls controllers, drives Butterchurn, updates texture */
   render(): void {
+    // Poll VR controllers
+    const input = this.controls.poll();
+
+    // Preset navigation
+    if (input.nextPreset) this.milkdrop.nextPreset();
+    if (input.prevPreset) this.milkdrop.prevPreset();
+    if (input.randomPreset) this.milkdrop.randomPreset();
+
+    // Parameter overrides from left thumbstick
+    this.milkdrop.overrides.zoomDelta = input.zoomDelta;
+    this.milkdrop.overrides.rotDelta = input.rotDelta;
+    if (input.resetParams) {
+      this.milkdrop.overrides.zoomDelta = 0;
+      this.milkdrop.overrides.rotDelta = 0;
+      dbg('[Controls] Params reset');
+    }
+
     // Drive Butterchurn from the XR loop since requestAnimationFrame
     // is paused when the browser enters immersive VR mode
     this.milkdrop.renderFrame();
@@ -87,7 +109,7 @@ export class VRRenderer {
 
     this.frameCount++;
     if (this.frameCount <= 5 || this.frameCount % 300 === 0) {
-      dbg(`[VR] frame ${this.frameCount} | snapshot ${this.milkdrop.snapshotCanvas.width}x${this.milkdrop.snapshotCanvas.height}`);
+      dbg(`[VR] frame ${this.frameCount}`);
     }
   }
 

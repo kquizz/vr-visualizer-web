@@ -12,6 +12,11 @@ import butterchurn from 'butterchurn';
 import butterchurnPresets from 'butterchurn-presets';
 import { dbg } from './debug';
 
+export interface ParamOverrides {
+  zoomDelta: number;  // added to preset's zoom each frame
+  rotDelta: number;   // added to preset's rot each frame
+}
+
 export class MilkdropVisualizer {
   private visualizer: any = null;
   private canvas: HTMLCanvasElement;
@@ -24,6 +29,9 @@ export class MilkdropVisualizer {
   /** 2D snapshot of the latest Butterchurn frame — safe to read any time */
   snapshotCanvas: HTMLCanvasElement;
   private snapshotCtx: CanvasRenderingContext2D;
+
+  /** Runtime parameter overrides applied each frame */
+  overrides: ParamOverrides = { zoomDelta: 0, rotDelta: 0 };
 
   onPresetChange?: (name: string) => void;
 
@@ -102,9 +110,32 @@ export class MilkdropVisualizer {
     }
   }
 
+  /** Apply parameter overrides by reaching into Butterchurn's internal preset state */
+  private applyOverrides(): void {
+    const { zoomDelta, rotDelta } = this.overrides;
+    if (zoomDelta === 0 && rotDelta === 0) return;
+
+    try {
+      // Butterchurn internals: visualizer.renderer.presetEquationRunner.mdVSFrame
+      const runner = this.visualizer?.renderer?.presetEquationRunner;
+      if (runner?.mdVSFrame) {
+        const frame = runner.mdVSFrame;
+        if (zoomDelta !== 0 && 'zoom' in frame) {
+          frame.zoom += zoomDelta * 0.02; // scale to reasonable range
+        }
+        if (rotDelta !== 0 && 'rot' in frame) {
+          frame.rot += rotDelta * 0.05;
+        }
+      }
+    } catch {
+      // Internals changed — silently ignore
+    }
+  }
+
   /** Render one frame and snapshot it. Called externally (e.g., from XR loop) or internally. */
   renderFrame(): void {
     if (this.visualizer) {
+      this.applyOverrides();
       this.visualizer.render();
       this.snapshotCtx.drawImage(this.canvas, 0, 0);
     }
