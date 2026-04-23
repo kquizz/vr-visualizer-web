@@ -190,7 +190,7 @@ async function initVR(): Promise<void> {
     try {
       if (!vr) {
         dbg('[VR] Creating VRRenderer...');
-        vr = new VRRenderer(threeCanvas, milkdrop);
+        vr = new VRRenderer(threeCanvas, milkdrop, audio);
         dbg('[VR] VRRenderer created');
       }
       dbg('[VR] Requesting VR session...');

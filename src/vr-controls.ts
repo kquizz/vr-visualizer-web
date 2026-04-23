@@ -41,6 +41,7 @@ export interface VRControlState {
   prevPreset: boolean;
   randomPreset: boolean;
   resetParams: boolean;
+  togglePassthrough: boolean;
 
   // Which mode is active
   mode: 'navigate' | 'zoom-rot' | 'warp-decay' | 'color' | 'gamma-scale';
@@ -52,9 +53,10 @@ export interface VRControlState {
 
 export class VRControls {
   private session: XRSession | null = null;
-  private prevStickX = 0;  // for edge-triggered preset switching
+  private prevStickX = 0;
   private prevLeftTrigger = false;
   private prevRightTrigger = false;
+  private prevLeftStickPress = false;
 
   attach(session: XRSession): void {
     this.session = session;
@@ -67,6 +69,7 @@ export class VRControls {
       prevPreset: false,
       randomPreset: false,
       resetParams: false,
+      togglePassthrough: false,
       mode: 'navigate',
       stickX: 0,
       stickY: 0,
@@ -101,6 +104,11 @@ export class VRControls {
         leftTrigger = buttons.length > 0 && buttons[0].pressed;
         stickX = axes.length > 2 ? axes[2] : 0;
         stickY = axes.length > 3 ? axes[3] : 0;
+
+        // Left stick press → toggle passthrough (edge-triggered)
+        const stickPress = buttons.length > 3 && buttons[3].pressed;
+        if (stickPress && !this.prevLeftStickPress) state.togglePassthrough = true;
+        this.prevLeftStickPress = stickPress;
       }
     }
 
