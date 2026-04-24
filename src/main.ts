@@ -9,6 +9,19 @@ if (window.location.search.includes('debug')) {
   dbg('Debug mode enabled');
 }
 
+// --- Seizure warning ---
+const warningEl = document.getElementById('seizure-warning') as HTMLDivElement;
+const btnAccept = document.getElementById('btn-accept-warning') as HTMLButtonElement;
+
+if (localStorage.getItem('seizure-warning-accepted')) {
+  warningEl.style.display = 'none';
+} else {
+  btnAccept.addEventListener('click', () => {
+    localStorage.setItem('seizure-warning-accepted', '1');
+    warningEl.style.display = 'none';
+  });
+}
+
 // DOM elements
 const milkdropCanvas = document.getElementById('milkdrop-canvas') as HTMLCanvasElement;
 const threeCanvas = document.getElementById('three-canvas') as HTMLCanvasElement;

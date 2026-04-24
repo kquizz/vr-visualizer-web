@@ -114,6 +114,29 @@
 
     <div id="preset-name"></div>
 
+    <!-- Seizure warning — shown on first visit -->
+    <div id="seizure-warning" style="
+      position: absolute; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.95);
+    ">
+      <div style="max-width: 480px; text-align: center; padding: 30px;">
+        <div style="font-size: 32px; margin-bottom: 16px;">&#9888;&#65039;</div>
+        <h2 style="font-size: 20px; margin-bottom: 12px; color: #ff4444;">Photosensitivity Warning</h2>
+        <p style="font-size: 14px; line-height: 1.6; opacity: 0.85; margin-bottom: 8px;">
+          This visualizer produces rapidly flashing lights, colors, and patterns that may cause discomfort or trigger seizures in people with photosensitive epilepsy.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; opacity: 0.85; margin-bottom: 20px;">
+          <strong>In VR, these effects are more intense.</strong> If you experience dizziness, altered vision, eye or muscle twitching, or disorientation, immediately stop and consult a doctor.
+        </p>
+        <button id="btn-accept-warning" style="
+          padding: 12px 32px; font-size: 16px;
+          border: 1px solid rgba(255,255,255,0.3); border-radius: 8px;
+          background: rgba(255,255,255,0.1); color: #fff; cursor: pointer;
+        ">I Understand</button>
+      </div>
+    </div>
+
     <div id="status">
       <p>Choose an audio source to start</p>
     </div>

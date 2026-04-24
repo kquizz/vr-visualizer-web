@@ -13,7 +13,7 @@ import type { AudioEngine } from './audio';
 import { VRControls } from './vr-controls';
 
 const BASE_RADIUS = 200;
-const PULSE_AMOUNT = 40; // max radius change from bass
+const PULSE_AMOUNT = 120; // max radius change from bass — big and obvious
 
 export class VRRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -29,6 +29,7 @@ export class VRRenderer {
   private controls: VRControls;
   private freqData: any;
   private passthrough = false;
+  private smoothBass = 0; // smoothed bass value for pulsing
 
   constructor(threeCanvas: HTMLCanvasElement, milkdrop: MilkdropVisualizer, audio: AudioEngine) {
     this.threeCanvas = threeCanvas;
@@ -72,7 +73,7 @@ export class VRRenderer {
 
     this.sphereMaterial = new THREE.MeshBasicMaterial({ map: this.texture });
     this.sphere = new THREE.Mesh(geometry, this.sphereMaterial);
-    this.sphere.rotation.y = Math.PI / 2; // seam behind user
+    this.sphere.rotation.y = Math.PI * 1.5; // center content in front of user
     this.scene.add(this.sphere);
 
     window.addEventListener('resize', () => this.onResize());
@@ -102,24 +103,36 @@ export class VRRenderer {
       this.sphereMaterial.blending = THREE.AdditiveBlending;
       this.sphereMaterial.opacity = 0.85;
       this.sphereMaterial.transparent = true;
-      this.scene.background = null; // let passthrough show through
+      this.sphereMaterial.depthWrite = false;
+      this.scene.background = null;
+      // Transparent clear so passthrough shows through
+      this.renderer.setClearColor(0x000000, 0);
       dbg('[VR] Passthrough ON — additive blend');
     } else {
       this.sphereMaterial.blending = THREE.NormalBlending;
       this.sphereMaterial.opacity = 1.0;
       this.sphereMaterial.transparent = false;
+      this.sphereMaterial.depthWrite = true;
       this.scene.background = new THREE.Color(0x000000);
+      this.renderer.setClearColor(0x000000, 1);
       dbg('[VR] Passthrough OFF — normal');
     }
     this.sphereMaterial.needsUpdate = true;
   }
 
   async enterVR(): Promise<void> {
-    dbg('[VR] Requesting XR session...');
+    dbg('[VR] Requesting XR session with passthrough...');
+    // Request immersive-vr with passthrough feature for Quest 3
+    // The passthrough feature allows toggling camera passthrough on/off
     const session = await navigator.xr!.requestSession('immersive-vr', {
-      optionalFeatures: ['local-floor', 'bounded-floor', 'passthrough'],
-      // @ts-expect-error — not yet in all TS type defs
-      environmentBlendMode: 'alpha-blend',
+      optionalFeatures: ['local-floor', 'bounded-floor'],
+      requiredFeatures: ['passthrough'],
+    }).catch(async () => {
+      // Fallback without passthrough requirement
+      dbg('[VR] Passthrough not available, falling back to standard VR');
+      return navigator.xr!.requestSession('immersive-vr', {
+        optionalFeatures: ['local-floor', 'bounded-floor'],
+      });
     });
     dbg('[VR] Got XR session');
     this.controls.attach(session);
@@ -174,18 +187,23 @@ export class VRRenderer {
     // Drive Butterchurn
     this.milkdrop.renderFrame();
 
-    // Audio-reactive sphere pulse
-    const bass = this.getBassEnergy();
-    const pulseRadius = BASE_RADIUS + bass * PULSE_AMOUNT;
-    const currentScale = pulseRadius / BASE_RADIUS;
-    this.sphere.scale.setScalar(currentScale);
+    // Audio-reactive sphere pulse with smoothing
+    const rawBass = this.getBassEnergy();
+    // Fast attack, slow release — feels punchy
+    if (rawBass > this.smoothBass) {
+      this.smoothBass += (rawBass - this.smoothBass) * 0.4; // fast attack
+    } else {
+      this.smoothBass += (rawBass - this.smoothBass) * 0.08; // slow decay
+    }
+    const pulseScale = 1.0 + (this.smoothBass * PULSE_AMOUNT / BASE_RADIUS);
+    this.sphere.scale.setScalar(pulseScale);
 
     this.texture.needsUpdate = true;
     this.renderer.render(this.scene, this.camera);
 
     this.frameCount++;
-    if (this.frameCount <= 5 || this.frameCount % 300 === 0) {
-      dbg(`[VR] frame ${this.frameCount} | bass:${bass.toFixed(2)}`);
+    if (this.frameCount <= 5 || this.frameCount % 60 === 0) {
+      dbg(`[VR] frame ${this.frameCount} | bass:${rawBass.toFixed(3)} smooth:${this.smoothBass.toFixed(3)} scale:${pulseScale.toFixed(3)}`);
     }
   }
 
