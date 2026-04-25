@@ -5,6 +5,7 @@ import { PresetBrowser } from './preset-browser';
 import { dbg, enableDebug } from './debug';
 import { BeatDetector } from './beat-detector';
 import { TouchControls } from './touch-controls';
+import { MidiController } from './midi-controller';
 
 // Enable debug overlay with ?debug in URL
 if (window.location.search.includes('debug')) {
@@ -58,6 +59,35 @@ touch.onTap = () => {
   const controls = document.getElementById('controls')!;
   controls.style.opacity = controls.style.opacity === '0' ? '1' : '0';
 };
+
+// MIDI controller
+const btnMidi = document.getElementById('btn-midi') as HTMLButtonElement;
+let midi: MidiController | null = null;
+
+if (MidiController.isSupported()) {
+  btnMidi.style.display = 'block';
+  btnMidi.addEventListener('click', async () => {
+    if (midi) return;
+    midi = new MidiController();
+    midi.onCC = (param, value) => {
+      (milkdrop.overrides as any)[param] = value;
+    };
+    midi.onNoteOn = () => {
+      milkdrop.randomPreset();
+      presetBrowser.updateActiveHighlight();
+    };
+    midi.onConnectionChange = (connected, name) => {
+      btnMidi.classList.toggle('active', connected);
+      btnMidi.title = connected ? `Connected: ${name}` : 'Connect MIDI controller';
+    };
+    try {
+      await midi.connect();
+    } catch (err) {
+      statusEl.textContent = `MIDI error: ${err}`;
+      statusEl.classList.remove('hidden');
+    }
+  });
+}
 
 let vr: VRRenderer | null = null;
 
