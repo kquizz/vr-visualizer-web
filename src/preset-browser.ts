@@ -4,6 +4,7 @@
  */
 
 import type { MilkdropVisualizer } from './visualizer';
+import { buildShareURL } from './playlist';
 
 const STORAGE_KEY = 'milkdrop-favorites-only';
 
@@ -46,9 +47,27 @@ export class PresetBrowser {
     closeBtn.title = 'Close';
     closeBtn.textContent = '\u2715'; // ✕
 
+    const shareBtn = document.createElement('button');
+    shareBtn.id = 'pb-share';
+    shareBtn.title = 'Copy share link';
+    shareBtn.textContent = '\u{1F517}'; // 🔗
+    shareBtn.addEventListener('click', () => {
+      if (this.milkdrop.favorites.size === 0) {
+        shareBtn.textContent = 'No favs!';
+        setTimeout(() => { shareBtn.textContent = '\u{1F517}'; }, 2000);
+        return;
+      }
+      const url = buildShareURL(this.milkdrop.presetNames, this.milkdrop.favorites);
+      navigator.clipboard.writeText(url).then(() => {
+        shareBtn.textContent = 'Copied!';
+        setTimeout(() => { shareBtn.textContent = '\u{1F517}'; }, 2000);
+      });
+    });
+
     header.appendChild(this.searchInput);
     header.appendChild(this.favToggle);
     header.appendChild(closeBtn);
+    header.appendChild(shareBtn);
 
     this.statsEl = document.createElement('div');
     this.statsEl.className = 'pb-stats';
@@ -245,5 +264,18 @@ export class PresetBrowser {
   toggle(): void {
     if (this.visible) this.hide();
     else this.show();
+  }
+
+  importPlaylist(names: string[]): void {
+    for (const name of names) {
+      if (!this.milkdrop.isFavorite(name)) {
+        this.milkdrop.toggleFavorite(name);
+      }
+    }
+    for (const [name, item] of this.items) {
+      const star = item.querySelector('.pb-star');
+      if (star) star.classList.toggle('fav', this.milkdrop.isFavorite(name));
+    }
+    this.updateStats();
   }
 }

@@ -6,6 +6,7 @@ import { dbg, enableDebug } from './debug';
 import { BeatDetector } from './beat-detector';
 import { TouchControls } from './touch-controls';
 import { MidiController } from './midi-controller';
+import { getPlaylistFromURL, decodePlaylist, buildShareURL } from './playlist';
 
 // Enable debug overlay with ?debug in URL
 if (window.location.search.includes('debug')) {
@@ -89,6 +90,23 @@ if (MidiController.isSupported()) {
   });
 }
 
+// Share button
+const btnShare = document.getElementById('btn-share') as HTMLButtonElement;
+btnShare.addEventListener('click', () => {
+  if (milkdrop.favorites.size === 0) {
+    statusEl.textContent = 'Favorite some presets first, then share!';
+    statusEl.classList.remove('hidden');
+    setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    return;
+  }
+  milkdrop.initPresetList();
+  const url = buildShareURL(milkdrop.presetNames, milkdrop.favorites);
+  navigator.clipboard.writeText(url).then(() => {
+    btnShare.textContent = 'Copied!';
+    setTimeout(() => { btnShare.textContent = 'Share'; }, 2000);
+  });
+});
+
 let vr: VRRenderer | null = null;
 
 // Auto-cycle presets
@@ -131,6 +149,19 @@ function startVisualization(): void {
 
   // Populate preset browser now that presets are loaded
   presetBrowser.populate();
+
+  // Import shared playlist from URL if present
+  const playlistParam = getPlaylistFromURL();
+  if (playlistParam) {
+    const names = decodePlaylist(milkdrop.presetNames, playlistParam);
+    if (names.length > 0) {
+      presetBrowser.importPlaylist(names);
+      milkdrop.useFavorites = true;
+      statusEl.textContent = `Imported ${names.length} presets from shared link!`;
+      statusEl.classList.remove('hidden');
+      setTimeout(() => statusEl.classList.add('hidden'), 3000);
+    }
+  }
 
   // Beat detection — auto-switch presets on energy spikes
   if (audio.analyser) {

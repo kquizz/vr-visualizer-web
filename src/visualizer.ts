@@ -81,6 +81,10 @@ export class MilkdropVisualizer {
     return this.favorites.has(name);
   }
 
+  getFavoriteNames(): string[] {
+    return this.presetNames.filter(n => this.favorites.has(n));
+  }
+
   get currentPresetName(): string {
     return this.presetNames[this.currentIndex] ?? '(none)';
   }
