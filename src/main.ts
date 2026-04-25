@@ -4,6 +4,7 @@ import { VRRenderer } from './vr';
 import { PresetBrowser } from './preset-browser';
 import { dbg, enableDebug } from './debug';
 import { BeatDetector } from './beat-detector';
+import { TouchControls } from './touch-controls';
 
 // Enable debug overlay with ?debug in URL
 if (window.location.search.includes('debug')) {
@@ -44,6 +45,20 @@ const audio = new AudioEngine();
 const milkdrop = new MilkdropVisualizer(milkdropCanvas);
 const presetBrowser = new PresetBrowser(milkdrop);
 const beatDetector = new BeatDetector();
+
+// Mobile touch controls
+const touch = new TouchControls();
+touch.attach(milkdropCanvas);
+touch.onSwipeLeft = () => { milkdrop.nextPreset(); presetBrowser.updateActiveHighlight(); };
+touch.onSwipeRight = () => { milkdrop.prevPreset(); presetBrowser.updateActiveHighlight(); };
+touch.onSwipeUp = () => presetBrowser.show();
+touch.onSwipeDown = () => presetBrowser.hide();
+touch.onDoubleTap = () => { milkdrop.randomPreset(); presetBrowser.updateActiveHighlight(); };
+touch.onTap = () => {
+  const controls = document.getElementById('controls')!;
+  controls.style.opacity = controls.style.opacity === '0' ? '1' : '0';
+};
+
 let vr: VRRenderer | null = null;
 
 // Auto-cycle presets
