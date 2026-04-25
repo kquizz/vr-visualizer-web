@@ -221,9 +221,14 @@ async function initVR(): Promise<void> {
 
 initVR();
 
-// --- Tab capture support check ---
+// --- Browser compatibility checks ---
 
+const isFirefox = navigator.userAgent.includes('Firefox');
 if (!navigator.mediaDevices?.getDisplayMedia) {
   btnTab.disabled = true;
   btnTab.title = 'Tab capture not supported in this browser';
+} else if (isFirefox) {
+  btnTab.disabled = true;
+  btnTab.title = 'Firefox does not support tab audio capture — use Chrome or Edge';
+  btnTab.textContent = 'Tab Audio (Chrome only)';
 }

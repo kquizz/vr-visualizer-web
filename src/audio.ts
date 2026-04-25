@@ -20,14 +20,19 @@ export class AudioEngine {
     if (!this.ctx) {
       this.ctx = new AudioContext();
     }
+    // Resume if suspended (browsers require user gesture)
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
     return this.ctx;
   }
 
-  private setupAnalyser(ctx: AudioContext): AnalyserNode {
+  private createAnalyser(ctx: AudioContext): AnalyserNode {
+    // Just create the analyser — don't connect it to destination yet.
+    // Callers decide whether to route through to speakers.
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.7;
-    analyser.connect(ctx.destination);
     this.analyser = analyser;
     return analyser;
   }
@@ -37,6 +42,10 @@ export class AudioEngine {
     if (this.sourceNode) {
       this.sourceNode.disconnect();
       this.sourceNode = null;
+    }
+    if (this.analyser) {
+      this.analyser.disconnect();
+      this.analyser = null;
     }
     if (this.stream) {
       this.stream.getTracks().forEach(t => t.stop());
@@ -53,7 +62,7 @@ export class AudioEngine {
   async connectFile(file: File): Promise<void> {
     this.disconnectSource();
     const ctx = this.ensureContext();
-    const analyser = this.setupAnalyser(ctx);
+    const analyser = this.createAnalyser(ctx);
 
     const url = URL.createObjectURL(file);
     const audio = new Audio();
@@ -62,25 +71,26 @@ export class AudioEngine {
     this.audioElement = audio;
 
     const source = ctx.createMediaElementSource(audio);
+    // source → analyser → speakers (we need to hear the file)
     source.connect(analyser);
+    analyser.connect(ctx.destination);
     this.sourceNode = source;
 
     await audio.play();
   }
 
   /**
-   * Capture audio from another browser tab via getDisplayMedia.
-   * The user picks which tab to share — we only take the audio track.
+   * Capture audio from a browser tab via getDisplayMedia.
+   * Only works with Chrome tabs (not windows/screens/apps).
+   * Firefox does not support audio capture via getDisplayMedia.
    */
   async connectTabCapture(): Promise<void> {
     this.disconnectSource();
     const ctx = this.ensureContext();
-    const analyser = this.setupAnalyser(ctx);
+    const analyser = this.createAnalyser(ctx);
 
-    // preferCurrentTab: false lets user pick ANY tab
-    // systemAudio: 'include' requests system audio on supported browsers
     const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true, // required by spec, but we ignore the video track
+      video: true, // required by spec
       audio: {
         suppressLocalAudioPlayback: false,
       } as any,
@@ -92,15 +102,16 @@ export class AudioEngine {
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length === 0) {
       stream.getTracks().forEach(t => t.stop());
-      throw new Error('No audio track — this only works with browser tabs (not desktop apps). Pick a Chrome tab and check "Share tab audio"');
+      throw new Error(
+        'No audio track received. This only works when sharing a Chrome tab ' +
+        '(not a window or screen). Make sure to check "Share tab audio" in the dialog.'
+      );
     }
 
-    // Create a stream with only the audio track
+    // source → analyser (no destination — tab audio already plays in the browser)
     const audioStream = new MediaStream(audioTracks);
     const source = ctx.createMediaStreamSource(audioStream);
     source.connect(analyser);
-    // Don't connect to destination — the tab's audio already plays in the browser
-    analyser.disconnect();
     this.sourceNode = source;
 
     // Stop visualizing if user stops sharing
@@ -113,15 +124,14 @@ export class AudioEngine {
   async connectMicrophone(): Promise<void> {
     this.disconnectSource();
     const ctx = this.ensureContext();
-    const analyser = this.setupAnalyser(ctx);
+    const analyser = this.createAnalyser(ctx);
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.stream = stream;
 
+    // source → analyser (no destination — avoids feedback loop)
     const source = ctx.createMediaStreamSource(stream);
     source.connect(analyser);
-    // Don't connect analyser to destination — avoids feedback loop
-    analyser.disconnect();
     this.sourceNode = source;
   }
 
