@@ -67,8 +67,11 @@ let midi: MidiController | null = null;
 
 if (MidiController.isSupported()) {
   btnMidi.style.display = 'block';
+  btnMidi.title = 'Connect a USB DJ controller or MIDI device to control visuals with knobs and buttons';
   btnMidi.addEventListener('click', async () => {
     if (midi) return;
+    statusEl.textContent = 'Looking for MIDI devices...';
+    statusEl.classList.remove('hidden');
     midi = new MidiController();
     midi.onCC = (param, value) => {
       (milkdrop.overrides as any)[param] = value;
@@ -79,13 +82,24 @@ if (MidiController.isSupported()) {
     };
     midi.onConnectionChange = (connected, name) => {
       btnMidi.classList.toggle('active', connected);
-      btnMidi.title = connected ? `Connected: ${name}` : 'Connect MIDI controller';
+      btnMidi.title = connected
+        ? `Connected: ${name} — knobs control zoom, warp, colors. Keys change presets.`
+        : 'Connect a USB DJ controller or MIDI device to control visuals with knobs and buttons';
+      statusEl.textContent = connected
+        ? `MIDI connected: ${name}. Turn knobs to control visuals!`
+        : `MIDI disconnected: ${name}`;
+      statusEl.classList.remove('hidden');
+      setTimeout(() => statusEl.classList.add('hidden'), 4000);
     };
     try {
       await midi.connect();
+      if (!midi.isConnected()) {
+        statusEl.textContent = 'No MIDI devices found. Plug in a controller and try again.';
+        setTimeout(() => statusEl.classList.add('hidden'), 4000);
+      }
     } catch (err) {
       statusEl.textContent = `MIDI error: ${err}`;
-      statusEl.classList.remove('hidden');
+      setTimeout(() => statusEl.classList.add('hidden'), 4000);
     }
   });
 }
