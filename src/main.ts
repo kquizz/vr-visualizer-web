@@ -1,6 +1,7 @@
 import { AudioEngine } from './audio';
 import { MilkdropVisualizer } from './visualizer';
 import { VRRenderer } from './vr';
+import { PresetBrowser } from './preset-browser';
 import { dbg, enableDebug } from './debug';
 
 // Enable debug overlay with ?debug in URL
@@ -36,10 +37,12 @@ const btnMic = document.getElementById('btn-mic') as HTMLButtonElement;
 const btnPrev = document.getElementById('btn-preset-prev') as HTMLButtonElement;
 const btnNext = document.getElementById('btn-preset-next') as HTMLButtonElement;
 const btnVR = document.getElementById('btn-vr') as HTMLButtonElement;
+const btnBrowse = document.getElementById('btn-browse') as HTMLButtonElement;
 
 // Core modules
 const audio = new AudioEngine();
 const milkdrop = new MilkdropVisualizer(milkdropCanvas);
+const presetBrowser = new PresetBrowser(milkdrop);
 let vr: VRRenderer | null = null;
 
 // Auto-cycle presets
@@ -72,6 +75,9 @@ function startVisualization(): void {
 
   // Hide status
   statusEl.classList.add('hidden');
+
+  // Populate preset browser now that presets are loaded
+  presetBrowser.populate();
 
   dbg(`Visualizer started: ${milkdrop.presetCount} presets, canvas ${milkdropCanvas.width}x${milkdropCanvas.height}`);
 }
@@ -125,8 +131,9 @@ fileInput.addEventListener('change', () => {
 
 btnTab.addEventListener('click', () => handleTabCapture());
 btnMic.addEventListener('click', () => handleMicrophone());
-btnPrev.addEventListener('click', () => milkdrop.prevPreset());
-btnNext.addEventListener('click', () => milkdrop.nextPreset());
+btnPrev.addEventListener('click', () => { milkdrop.prevPreset(); presetBrowser.updateActiveHighlight(); });
+btnNext.addEventListener('click', () => { milkdrop.nextPreset(); presetBrowser.updateActiveHighlight(); });
+btnBrowse.addEventListener('click', () => presetBrowser.toggle());
 
 // --- Drag & drop ---
 
@@ -161,6 +168,12 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'r':
       milkdrop.randomPreset();
+      break;
+    case 'b':
+      presetBrowser.toggle();
+      break;
+    case 'f':
+      milkdrop.toggleFavorite(milkdrop.currentPresetName);
       break;
   }
 });

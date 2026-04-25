@@ -27,11 +27,13 @@ export interface ParamOverrides {
 export class MilkdropVisualizer {
   private visualizer: any = null;
   private canvas: HTMLCanvasElement;
-  private presetNames: string[] = [];
+  presetNames: string[] = [];
   private presetMap: Record<string, any> = {};
   private currentIndex = 0;
   private animFrameId = 0;
   private running = false;
+  favorites: Set<string> = new Set();
+  useFavorites = false; // when true, next/prev/random only pick from favorites
 
   /** 2D snapshot of the latest Butterchurn frame — safe to read any time */
   snapshotCanvas: HTMLCanvasElement;
@@ -51,6 +53,32 @@ export class MilkdropVisualizer {
     this.canvas = canvas;
     this.snapshotCanvas = document.createElement('canvas');
     this.snapshotCtx = this.snapshotCanvas.getContext('2d')!;
+    this.loadFavorites();
+  }
+
+  private loadFavorites(): void {
+    try {
+      const saved = localStorage.getItem('milkdrop-favorites');
+      if (saved) this.favorites = new Set(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }
+
+  saveFavorites(): void {
+    localStorage.setItem('milkdrop-favorites', JSON.stringify([...this.favorites]));
+  }
+
+  toggleFavorite(name: string): boolean {
+    if (this.favorites.has(name)) {
+      this.favorites.delete(name);
+    } else {
+      this.favorites.add(name);
+    }
+    this.saveFavorites();
+    return this.favorites.has(name);
+  }
+
+  isFavorite(name: string): boolean {
+    return this.favorites.has(name);
   }
 
   get currentPresetName(): string {
@@ -101,18 +129,47 @@ export class MilkdropVisualizer {
     }
   }
 
+  /** Get the effective preset list (all or favorites only) */
+  private getActiveList(): string[] {
+    if (this.useFavorites && this.favorites.size > 0) {
+      return this.presetNames.filter(n => this.favorites.has(n));
+    }
+    return this.presetNames;
+  }
+
+  loadPresetByName(name: string, blendTime = 2.0): void {
+    const idx = this.presetNames.indexOf(name);
+    if (idx >= 0) {
+      this.currentIndex = idx;
+      this.loadCurrentPreset(blendTime);
+    }
+  }
+
   nextPreset(): void {
-    this.currentIndex = (this.currentIndex + 1) % this.presetNames.length;
+    const list = this.getActiveList();
+    if (list.length === 0) return;
+    const currentName = this.presetNames[this.currentIndex];
+    const activeIdx = list.indexOf(currentName);
+    const nextName = list[(activeIdx + 1) % list.length];
+    this.currentIndex = this.presetNames.indexOf(nextName);
     this.loadCurrentPreset(2.0);
   }
 
   prevPreset(): void {
-    this.currentIndex = (this.currentIndex - 1 + this.presetNames.length) % this.presetNames.length;
+    const list = this.getActiveList();
+    if (list.length === 0) return;
+    const currentName = this.presetNames[this.currentIndex];
+    const activeIdx = list.indexOf(currentName);
+    const prevName = list[(activeIdx - 1 + list.length) % list.length];
+    this.currentIndex = this.presetNames.indexOf(prevName);
     this.loadCurrentPreset(2.0);
   }
 
   randomPreset(): void {
-    this.currentIndex = Math.floor(Math.random() * this.presetNames.length);
+    const list = this.getActiveList();
+    if (list.length === 0) return;
+    const name = list[Math.floor(Math.random() * list.length)];
+    this.currentIndex = this.presetNames.indexOf(name);
     this.loadCurrentPreset(2.0);
   }
 
