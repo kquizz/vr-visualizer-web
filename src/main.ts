@@ -5,8 +5,9 @@ import { PresetBrowser } from './preset-browser';
 import { dbg, enableDebug } from './debug';
 import { BeatDetector } from './beat-detector';
 import { TouchControls } from './touch-controls';
-import { MidiController } from './midi-controller';
+import { MidiController, PARAM_LABELS, ASSIGNABLE_PARAMS } from './midi-controller';
 import { getPlaylistFromURL, decodePlaylist, buildShareURL } from './playlist';
+import { HelpOverlay } from './help-overlay';
 
 // Enable debug overlay with ?debug in URL
 if (window.location.search.includes('debug')) {
@@ -47,6 +48,7 @@ const audio = new AudioEngine();
 const milkdrop = new MilkdropVisualizer(milkdropCanvas);
 const presetBrowser = new PresetBrowser(milkdrop);
 const beatDetector = new BeatDetector();
+const helpOverlay = new HelpOverlay();
 
 // Mobile touch controls
 const touch = new TouchControls();
@@ -61,6 +63,84 @@ touch.onTap = () => {
   controls.style.opacity = controls.style.opacity === '0' ? '1' : '0';
 };
 
+// MIDI learn menu
+function showMidiLearnMenu(midiCtrl: MidiController): void {
+  // Remove existing menu if any
+  document.getElementById('midi-learn-menu')?.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'midi-learn-menu';
+  menu.style.cssText = `
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+    z-index: 40; background: rgba(10,10,15,0.95); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px; padding: 16px; backdrop-filter: blur(20px);
+    font-size: 13px; min-width: 280px;
+  `;
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size: 14px; margin-bottom: 12px; color: rgba(255,255,255,0.7);';
+  title.textContent = 'MIDI Learn — pick a parameter, then turn a knob';
+  menu.appendChild(title);
+
+  for (const param of ASSIGNABLE_PARAMS) {
+    const row = document.createElement('div');
+    row.style.cssText = `
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 8px; cursor: pointer; border-radius: 6px; margin: 2px 0;
+    `;
+    row.addEventListener('mouseenter', () => { row.style.background = 'rgba(255,255,255,0.08)'; });
+    row.addEventListener('mouseleave', () => { row.style.background = 'none'; });
+
+    const label = document.createElement('span');
+    label.textContent = PARAM_LABELS[param] ?? param;
+    label.style.color = '#fff';
+
+    const ccLabel = document.createElement('span');
+    const cc = midiCtrl.getCCForParam(param);
+    ccLabel.textContent = cc !== null ? `CC ${cc}` : 'not assigned';
+    ccLabel.style.cssText = `color: ${cc !== null ? 'rgba(100,200,100,0.7)' : 'rgba(255,255,255,0.3)'}; font-size: 12px;`;
+
+    row.appendChild(label);
+    row.appendChild(ccLabel);
+
+    row.addEventListener('click', () => {
+      midiCtrl.startLearn(param);
+      statusEl.textContent = `Turn a knob to assign it to "${PARAM_LABELS[param]}"...`;
+      statusEl.classList.remove('hidden');
+      menu.remove();
+    });
+
+    menu.appendChild(row);
+  }
+
+  // Reset button
+  const resetRow = document.createElement('div');
+  resetRow.style.cssText = 'margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);';
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'Reset to defaults';
+  resetBtn.style.cssText = 'font-size: 12px; padding: 4px 12px; opacity: 0.5;';
+  resetBtn.addEventListener('click', () => {
+    midiCtrl.resetMappings();
+    statusEl.textContent = 'MIDI mappings reset to defaults';
+    statusEl.classList.remove('hidden');
+    setTimeout(() => statusEl.classList.add('hidden'), 2000);
+    menu.remove();
+  });
+  resetRow.appendChild(resetBtn);
+  menu.appendChild(resetRow);
+
+  // Close on click outside
+  const closeHandler = (e: MouseEvent) => {
+    if (!menu.contains(e.target as Node) && e.target !== btnMidi) {
+      menu.remove();
+      document.removeEventListener('click', closeHandler);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+
+  document.body.appendChild(menu);
+}
+
 // MIDI controller
 const btnMidi = document.getElementById('btn-midi') as HTMLButtonElement;
 let midi: MidiController | null = null;
@@ -69,10 +149,16 @@ if (MidiController.isSupported()) {
   btnMidi.style.display = 'block';
   btnMidi.title = 'Connect a USB DJ controller or MIDI device to control visuals with knobs and buttons';
   btnMidi.addEventListener('click', async () => {
+    // If already connected, show MIDI learn menu
+    if (midi && midi.isConnected()) {
+      showMidiLearnMenu(midi);
+      return;
+    }
     if (midi) return;
     statusEl.textContent = 'Looking for MIDI devices...';
     statusEl.classList.remove('hidden');
     midi = new MidiController();
+    midi.loadMappings();
     midi.onCC = (param, value) => {
       (milkdrop.overrides as any)[param] = value;
     };
@@ -90,6 +176,11 @@ if (MidiController.isSupported()) {
         : `MIDI disconnected: ${name}`;
       statusEl.classList.remove('hidden');
       setTimeout(() => statusEl.classList.add('hidden'), 4000);
+    };
+    midi.onLearnComplete = (cc, param) => {
+      statusEl.textContent = `Mapped knob (CC ${cc}) → ${PARAM_LABELS[param] ?? param}`;
+      statusEl.classList.remove('hidden');
+      setTimeout(() => statusEl.classList.add('hidden'), 3000);
     };
     try {
       await midi.connect();
@@ -255,6 +346,9 @@ btnBeat.addEventListener('click', () => {
   btnBeat.classList.toggle('active', beatDetector.isEnabled());
 });
 
+const btnHelp = document.getElementById('btn-help') as HTMLButtonElement;
+btnHelp.addEventListener('click', () => helpOverlay.toggle());
+
 // --- Drag & drop ---
 
 document.addEventListener('dragenter', (e) => {
@@ -294,6 +388,10 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'f':
       milkdrop.toggleFavorite(milkdrop.currentPresetName);
+      break;
+    case 'h':
+    case '?':
+      helpOverlay.toggle();
       break;
   }
 });
