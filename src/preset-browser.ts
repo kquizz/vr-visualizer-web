@@ -129,8 +129,9 @@ export class PresetBrowser {
   }
 
   populate(): void {
-    this.list.replaceChildren(); // safe clear
+    this.list.replaceChildren();
     this.items.clear();
+    console.log(`[PresetBrowser] Populating with ${this.milkdrop.presetNames.length} presets`);
 
     for (const name of this.milkdrop.presetNames) {
       const item = document.createElement('div');
@@ -187,10 +188,13 @@ export class PresetBrowser {
 
   private filterList(): void {
     const query = this.searchInput.value.toLowerCase();
+    // If favorites mode is on but no favorites exist, show all
+    const hasFavs = this.milkdrop.favorites.size > 0;
+    const filterByFav = this.milkdrop.useFavorites && hasFavs;
     for (const [name, item] of this.items) {
       const match = name.toLowerCase().includes(query);
-      const favFilter = !this.milkdrop.useFavorites || this.milkdrop.isFavorite(name);
-      item.style.display = (match && favFilter) ? 'flex' : 'none';
+      const favOk = !filterByFav || this.milkdrop.isFavorite(name);
+      item.style.display = (match && favOk) ? 'flex' : 'none';
     }
   }
 

@@ -89,6 +89,13 @@ export class MilkdropVisualizer {
     return this.presetNames.length;
   }
 
+  /** Load just the preset names (for browsing without audio) */
+  initPresetList(): void {
+    if (this.presetNames.length > 0) return; // already loaded
+    this.presetMap = butterchurnPresets.getPresets();
+    this.presetNames = Object.keys(this.presetMap).sort();
+  }
+
   init(audioContext: AudioContext, audioNode: AudioNode): void {
     // 3072 balances crispness vs Quest GPU budget (4096 causes frame drops)
     const width = 3072;

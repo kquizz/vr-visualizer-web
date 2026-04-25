@@ -14,9 +14,8 @@ if (window.location.search.includes('debug')) {
 const warningEl = document.getElementById('seizure-warning') as HTMLDivElement;
 const btnAccept = document.getElementById('btn-accept-warning') as HTMLButtonElement;
 
-if (localStorage.getItem('seizure-warning-accepted')) {
-  warningEl.style.display = 'none';
-} else {
+if (!localStorage.getItem('seizure-warning-accepted')) {
+  warningEl.style.display = 'flex';
   btnAccept.addEventListener('click', () => {
     localStorage.setItem('seizure-warning-accepted', '1');
     warningEl.style.display = 'none';
@@ -133,7 +132,14 @@ btnTab.addEventListener('click', () => handleTabCapture());
 btnMic.addEventListener('click', () => handleMicrophone());
 btnPrev.addEventListener('click', () => { milkdrop.prevPreset(); presetBrowser.updateActiveHighlight(); });
 btnNext.addEventListener('click', () => { milkdrop.nextPreset(); presetBrowser.updateActiveHighlight(); });
-btnBrowse.addEventListener('click', () => presetBrowser.toggle());
+btnBrowse.addEventListener('click', () => {
+  // Load preset list even without audio — just can't hear anything
+  if (milkdrop.presetNames.length === 0) {
+    milkdrop.initPresetList();
+    presetBrowser.populate();
+  }
+  presetBrowser.toggle();
+});
 
 // --- Drag & drop ---
 
