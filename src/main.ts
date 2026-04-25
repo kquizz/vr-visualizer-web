@@ -3,6 +3,7 @@ import { MilkdropVisualizer } from './visualizer';
 import { VRRenderer } from './vr';
 import { PresetBrowser } from './preset-browser';
 import { dbg, enableDebug } from './debug';
+import { BeatDetector } from './beat-detector';
 
 // Enable debug overlay with ?debug in URL
 if (window.location.search.includes('debug')) {
@@ -42,6 +43,7 @@ const btnBrowse = document.getElementById('btn-browse') as HTMLButtonElement;
 const audio = new AudioEngine();
 const milkdrop = new MilkdropVisualizer(milkdropCanvas);
 const presetBrowser = new PresetBrowser(milkdrop);
+const beatDetector = new BeatDetector();
 let vr: VRRenderer | null = null;
 
 // Auto-cycle presets
@@ -64,6 +66,13 @@ function startVisualization(): void {
   milkdrop.resize(window.innerWidth, window.innerHeight);
   milkdrop.start();
 
+  // Beat detection frame loop (separate from Milkdrop's render loop)
+  function beatLoop() {
+    beatDetector.update();
+    requestAnimationFrame(beatLoop);
+  }
+  beatLoop();
+
   // Enable preset controls
   btnPrev.disabled = false;
   btnNext.disabled = false;
@@ -77,6 +86,15 @@ function startVisualization(): void {
 
   // Populate preset browser now that presets are loaded
   presetBrowser.populate();
+
+  // Beat detection — auto-switch presets on energy spikes
+  if (audio.analyser) {
+    beatDetector.attach(audio.analyser);
+    beatDetector.onBeat = () => {
+      milkdrop.randomPreset();
+      presetBrowser.updateActiveHighlight();
+    };
+  }
 
   dbg(`Visualizer started: ${milkdrop.presetCount} presets, canvas ${milkdropCanvas.width}x${milkdropCanvas.height}`);
 }
@@ -139,6 +157,12 @@ btnBrowse.addEventListener('click', () => {
     presetBrowser.populate();
   }
   presetBrowser.toggle();
+});
+
+const btnBeat = document.getElementById('btn-beat') as HTMLButtonElement;
+btnBeat.addEventListener('click', () => {
+  beatDetector.setEnabled(!beatDetector.isEnabled());
+  btnBeat.classList.toggle('active', beatDetector.isEnabled());
 });
 
 // --- Drag & drop ---
@@ -222,7 +246,7 @@ async function initVR(): Promise<void> {
     try {
       if (!vr) {
         dbg('[VR] Creating VRRenderer...');
-        vr = new VRRenderer(threeCanvas, milkdrop, audio);
+        vr = new VRRenderer(threeCanvas, milkdrop, audio, beatDetector);
         dbg('[VR] VRRenderer created');
       }
       dbg('[VR] Requesting VR session...');

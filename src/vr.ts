@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { dbg } from './debug';
 import type { MilkdropVisualizer } from './visualizer';
 import type { AudioEngine } from './audio';
+import type { BeatDetector } from './beat-detector';
 import { VRControls } from './vr-controls';
 
 const BASE_RADIUS = 200;
@@ -30,12 +31,14 @@ export class VRRenderer {
   private freqData: any;
   private passthrough = false;
   private smoothBass = 0; // smoothed bass value for pulsing
+  private beatDetector: BeatDetector;
 
-  constructor(threeCanvas: HTMLCanvasElement, milkdrop: MilkdropVisualizer, audio: AudioEngine) {
+  constructor(threeCanvas: HTMLCanvasElement, milkdrop: MilkdropVisualizer, audio: AudioEngine, beatDetector: BeatDetector) {
     this.threeCanvas = threeCanvas;
     this.milkdrop = milkdrop;
     this.audio = audio;
     this.controls = new VRControls();
+    this.beatDetector = beatDetector;
     const snapshotCanvas = milkdrop.snapshotCanvas;
 
     // Pre-allocate frequency data buffer
@@ -183,6 +186,8 @@ export class VRRenderer {
       this.milkdrop.resetOverrides();
       dbg('[Controls] All params reset');
     }
+
+    this.beatDetector.update();
 
     // Drive Butterchurn
     this.milkdrop.renderFrame();
